@@ -25,6 +25,7 @@ const unsigned char* GetResource_xrp_js(size_t* len);
 const unsigned char* GetResource_VERSION(size_t* len);
 }
 
+char chipID[20];
 char DEFAULT_SSID[32];
 
 XRPConfiguration config;
@@ -53,13 +54,6 @@ uint16_t seq = 0;
 // Generate the status text file
 void writeStatusToDisk(NetworkMode netMode) {
   File f = LittleFS.open("/status.txt", "w");
-
-  // Generate the default SSID using the flash ID
-  pico_unique_board_id_t id_out;
-  pico_get_unique_board_id(&id_out);
-  char chipID[20];
-  sprintf(chipID, "%02x%02x-%02x%02x", id_out.id[4], id_out.id[5], id_out.id[6], id_out.id[7]);
-  sprintf(DEFAULT_SSID, "XRP-%s", chipID);
 
   size_t len;
   std::string versionString{reinterpret_cast<const char*>(GetResource_VERSION(&len)), len};
@@ -291,6 +285,11 @@ void setupNetwork(XRPConfiguration configuration) {
 }
 
 void setup() {
+  // Generate the default SSID using the flash ID
+  pico_unique_board_id_t id_out;
+  pico_get_unique_board_id(&id_out);
+  sprintf(chipID, "%02x%02x-%02x%02x", id_out.id[4], id_out.id[5], id_out.id[6], id_out.id[7]);
+  sprintf(DEFAULT_SSID, "XRP-%s", chipID);
 
   // Start Serial port for logging
   Serial.begin(115200);
