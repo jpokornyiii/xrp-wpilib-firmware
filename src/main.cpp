@@ -24,6 +24,13 @@ const unsigned char* GetResource_skeleton_css(size_t* len);
 const unsigned char* GetResource_xrp_js(size_t* len);
 }
 
+// Beta board uses Wire where Production board uses Wire1
+#ifdef ARDUINO_SPARKFUN_XRP_CONTROLLER_BETA
+  #define MYWIRE Wire
+#else
+  #define MYWIRE Wire1
+#endif
+
 // HTTP server
 WebServer webServer(5000);
 
@@ -246,19 +253,17 @@ void setup() {
   // Start Serial port for logging
   Serial.begin(115200);
 
+  // Delay to allow to connect to Serial port
   delay(4000);
   Serial.println("[SETUP] Starting robot ...\n");
 
   // Start LittleFS for read/write from disk
   LittleFS.begin();
-
+  
   // Set up the I2C pins
-  Wire1.setSCL(I2C_SCL_1);
-  Wire1.setSDA(I2C_SDA_1);
-  Wire1.begin();
-
-  // Give a few seconds if attaching a Serail port listener
-  delay(2000);
+  MYWIRE.setSCL(I2C_SCL_1);
+  MYWIRE.setSDA(I2C_SDA_1);
+  MYWIRE.begin();
 
   XRPConfiguration * config = XRPConfiguration::getInstance();
 
@@ -270,7 +275,7 @@ void setup() {
 
   // Initialize IMU
   Serial.println("[IMU] Initializing IMU");
-  xrp::imuInit(IMU_I2C_ADDR, &Wire1);
+  xrp::imuInit(IMU_I2C_ADDR, &MYWIRE);
 
   Serial.println("[IMU] Beginning IMU calibration");
   xrp::imuCalibrate(5000);
