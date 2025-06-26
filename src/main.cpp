@@ -3,7 +3,6 @@
 #include <LittleFS.h>
 #include <SingleFileDrive.h>
 #include <WebServer.h>
-#include <WiFi.h>
 #include <WiFiUdp.h>
 #include <Wire.h>
 
@@ -11,6 +10,7 @@
 
 #include "byteutils.h"
 #include "config.h"
+#include "Network.h"
 #include "imu.h"
 #include "robot.h"
 #include "wpilibudp.h" 
@@ -22,7 +22,6 @@ const unsigned char* GetResource_index_html(size_t* len);
 const unsigned char* GetResource_normalize_css(size_t* len);
 const unsigned char* GetResource_skeleton_css(size_t* len);
 const unsigned char* GetResource_xrp_js(size_t* len);
-const unsigned char* GetResource_VERSION(size_t* len);
 }
 
 // Beta board uses Wire where Production board uses Wire1
@@ -31,10 +30,6 @@ const unsigned char* GetResource_VERSION(size_t* len);
 #else
   #define MYWIRE Wire1
 #endif
-
-char DEFAULT_SSID[32];
-
-XRPConfiguration config;
 
 // HTTP server
 WebServer webServer(5000);
@@ -56,27 +51,6 @@ unsigned long _avgLoopTimeUs = 0;
 unsigned long _loopTimeMeasurementCount = 0;
 
 uint16_t seq = 0;
-
-// Generate the status text file
-void writeStatusToDisk(NetworkMode netMode, char *chipID) {
-  File f = LittleFS.open("/status.txt", "w");
-
-  size_t len;
-  std::string versionString{reinterpret_cast<const char*>(GetResource_VERSION(&len)), len};
-  f.printf("Version: %s\n", versionString.c_str());
-  f.printf("Chip ID: %s\n", chipID);
-  f.printf("WiFi Mode: %s\n", netMode == NetworkMode::AP ? "AP" : "STA");
-  if (netMode == NetworkMode::AP) {
-    f.printf("AP SSID: %s\n", config.networkConfig.defaultAPName.c_str());
-    f.printf("AP PASS: %s\n", config.networkConfig.defaultAPPassword.c_str());
-  }
-  else {
-    f.printf("Connected to %s\n", WiFi.SSID().c_str());
-  }
-
-  f.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
-  f.close();
-}
 
 // ==================================================
 // UDP Management Functions
@@ -219,7 +193,9 @@ void setupWebServerRoutes() {
       return;
     }
     File f = LittleFS.open("/config.json", "w");
-    f.print(generateDefaultConfig(DEFAULT_SSID).toJsonString().c_str());
+    XRPConfiguration  * config = XRPConfiguration::getInstance();
+    config->generateDefaultConfig();
+    f.print(config->toJsonString().c_str());
     f.close();
     webServer.send(200, "text/plain", "OK");
   });
@@ -256,21 +232,7 @@ void updateLoopTime(unsigned long loopStart) {
   _avgLoopTimeUs = (totalTime + loopTime) / _loopTimeMeasurementCount;
 }
 
-NetworkMode setupNetwork(XRPConfiguration configuration) {
-
-  // Busy-loop if there's no WiFi hardware
-  if (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("[NET] No WiFi Module");
-    while (true);
-  }
-
-  // Set up WiFi AP
-  WiFi.setHostname(DEFAULT_SSID);
-
-  // Use configuration information
-  NetworkMode netConfigResult = configureNetwork(configuration);
-  Serial.printf("[NET] Actual WiFi Mode: %s\n", netConfigResult == NetworkMode::AP ? "AP" : "STA");
-
+void setupWebServer() {
   // Set up HTTP server routes
   Serial.println("[NET] Setting up Config webserver");
   setupWebServerRoutes();
@@ -285,34 +247,28 @@ NetworkMode setupNetwork(XRPConfiguration configuration) {
   Serial.println("[NET] Network Ready");
   Serial.printf("[NET] SSID: %s\n", WiFi.SSID().c_str());
   Serial.printf("[NET] IP: %s\n", WiFi.localIP().toString().c_str());
-
-  return netConfigResult;
 }
 
 void setup() {
   // Start Serial port for logging
   Serial.begin(115200);
 
+  // Delay to allow to connect to Serial port
+  delay(4000);
+  Serial.println("[SETUP] Starting robot ...\n");
+
   // Start LittleFS for read/write from disk
   LittleFS.begin();
-
+  
   // Set up the I2C pins
   MYWIRE.setSCL(I2C_SCL_1);
   MYWIRE.setSDA(I2C_SDA_1);
   MYWIRE.begin();
 
-  // Give a few seconds if attaching a Serail port listener
-  delay(2000);
-
-  // Generate the default SSID using the flash ID
-  pico_unique_board_id_t id_out;
-  pico_get_unique_board_id(&id_out);
-  char chipID[20];
-  sprintf(chipID, "%02x%02x-%02x%02x", id_out.id[4], id_out.id[5], id_out.id[6], id_out.id[7]);
-  sprintf(DEFAULT_SSID, "XRP-%s", chipID);
+  XRPConfiguration * config = XRPConfiguration::getInstance();
 
   // Read Config
-  config = loadConfiguration(DEFAULT_SSID);
+  config->loadConfiguration();
 
   // MUST BE BEFORE imuCalibrate (has digitalWrites) and configureNetwork
   xrp::robotInit();
@@ -325,10 +281,10 @@ void setup() {
   xrp::imuCalibrate(5000);
 
   // Setup Network
-  NetworkMode netMode = setupNetwork(config);
+  setupNetwork();
 
-  // Write current status file
-  writeStatusToDisk(netMode,chipID);
+  // Setup webserver
+  setupWebServer();
 
   // NOTE: For now, we'll force init the reflectance sensor
   // TODO Enable this via configuration

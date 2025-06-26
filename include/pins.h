@@ -47,15 +47,15 @@
 
 #ifdef PICO_RP2350
 
-// Non-Beta board
-#define PIN_LAYOUT_IDENT "Non-Beta"
-#define __XRP_NONBETA
+ // Non-Beta board
+ #define PIN_LAYOUT_IDENT "Non-Beta"
+ #define __XRP_NONBETA
 
 #else
-// Beta
-#define PIN_LAYOUT_IDENT "Beta"
+ // Beta
+ #define PIN_LAYOUT_IDENT "Beta"
 
-#define SERVO_3    __XRP_PIN_UNDEF
-#define SERVO_4    __XRP_PIN_UNDEF
+ #define SERVO_3    __XRP_PIN_UNDEF
+ #define SERVO_4    __XRP_PIN_UNDEF
 
 #endif
